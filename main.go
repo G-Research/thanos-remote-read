@@ -103,6 +103,9 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 		return HTTPError{err, http.StatusBadRequest}
 	}
 
+	// This does not do streaming, at the time of writing Prometheus doesn't ask
+	// for it anyway: https://github.com/prometheus/prometheus/issues/5926
+
 	resp, err := api.doStoreRequest(r.Context(), &req)
 	if err != nil {
 		return err
