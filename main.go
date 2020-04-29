@@ -11,6 +11,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
@@ -23,8 +24,18 @@ var (
 	flagStore  = flag.String("store", "localhost:10901", "Thanos Store API gRPC endpoint")
 )
 
+var (
+	httpRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "http",
+			Name:      "requests_total",
+		},
+		[]string{"code", "method", "handler"})
+)
+
 func main() {
 	flag.Parse()
+	prometheus.MustRegister(httpRequests)
 
 	api := &API{}
 	var err error
@@ -36,10 +47,16 @@ func main() {
 	}
 	api.client = storepb.NewStoreClient(conn)
 
-	http.HandleFunc("/", root)
-	http.HandleFunc("/-/healthy", ok)
+	handler := func(path, name string, f http.HandlerFunc) {
+		http.HandleFunc(path, promhttp.InstrumentHandlerCounter(
+			httpRequests.MustCurryWith(prometheus.Labels{"handler": name}),
+			f))
+	}
+	handler("/", "root", root)
+	handler("/-/healthy", "health", ok)
+	handler("/api/v1/read", "read", errorWrap(api.remoteRead))
+
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/api/v1/read", errorWrap(api.remoteRead))
 
 	log.Fatal(http.ListenAndServe(*flagListen, nil))
 }
@@ -199,6 +216,10 @@ func ok(w http.ResponseWriter, r *http.Request) {
 }
 
 func root(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-type", "text/html")
 	w.Write([]byte(`
 	<p>thanos-remote-read adapter</p>
