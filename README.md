@@ -11,7 +11,7 @@ This provides a way to bring some data from Thanos into a Prometheus instance.
 While that may not seem to solve the problem of Thanos query reliability (it is
 still querying Thanos), it allows to essentially emulate Prometheus federation
 but with Thanos providing the federated data. It also leads to an architecture
-that is easy to reason about.
+that is easier to reason about.
 
 ## Building
 
@@ -45,3 +45,18 @@ thanos query --store=some-store --selector-label='foo="bar"'
 
 (If needed you can run a dedicated Thanos query instance that exists to merely
 add that label.)
+
+## License
+
+Copyright 2020 G-Research
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+these files except in compliance with the License. You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
