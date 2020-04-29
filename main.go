@@ -1,3 +1,5 @@
+// Binary thanos-remote-read provides an adapter from Prometheus remote read
+// protocol to Thanos StoreAPI.
 package main
 
 import (
