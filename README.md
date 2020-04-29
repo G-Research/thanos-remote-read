@@ -5,8 +5,8 @@ This allows querying a Thanos StoreAPI server (store, query, etc.) from Promethe
 ## Why?
 
 Thanos ruler can be unreliable ([see
-docs](https://github.com/thanos-io/thanos/blob/master/docs/components/rule.md#risk)).
-This provides a way to bring some data from Thanos into a Prometheus instance.
+docs](https://thanos.io/components/rule.md/#risk)). This provides a way to
+bring some data from Thanos into a Prometheus instance.
 
 While that may not seem to solve the problem of Thanos query reliability (it is
 still querying Thanos), it provides a way to write rules that make the failure
@@ -28,11 +28,14 @@ groups:
   # This group reads from Thanos. Because it depends on a remote system
   # evaluting rules could fail.
   - name: read_thanos
+    rules:
     - record: thanos:metric
       expr: thanos_metric{source="thanos"}
+
   # The alerts can handle absent data how they like, rather than in
   # thanos-ruler, where `partial_response_strategy: ABORT` will always fail.
   - name: alerts
+    rules:
     - alert: Something
       # Treat this as an example, the point is it handles errors fetching from
       # Thanos.
