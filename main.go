@@ -10,6 +10,8 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
@@ -26,12 +28,17 @@ func main() {
 
 	api := &API{}
 	var err error
-	conn, err := grpc.Dial(*flagStore, grpc.WithInsecure())
+	conn, err := grpc.Dial(*flagStore, grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor))
 	if err != nil {
 		log.Fatal(err)
 	}
 	api.client = storepb.NewStoreClient(conn)
 
+	http.HandleFunc("/", root)
+	http.HandleFunc("/-/healthy", ok)
+	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/api/v1/read", errorWrap(api.remoteRead))
 
 	log.Fatal(http.ListenAndServe(*flagListen, nil))
@@ -144,7 +151,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 				t := &prompb.TimeSeries{}
 				for _, label := range r.Series.Labels {
 					t.Labels = append(t.Labels, prompb.Label{
-						Name: label.Name,
+						Name:  label.Name,
 						Value: label.Value,
 					})
 				}
@@ -171,7 +178,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 						ts, value := iter.At()
 						t.Samples = append(t.Samples, prompb.Sample{
 							Timestamp: ts,
-							Value: value,
+							Value:     value,
 						})
 					}
 				}
@@ -185,4 +192,19 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 		response.Results = append(response.Results, result)
 	}
 	return response, nil
+}
+
+func ok(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("ok"))
+}
+
+func root(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-type", "text/html")
+	w.Write([]byte(`
+	<p>thanos-remote-read adapter</p>
+	<ul>
+	  <li><a href="/-/healthy">/-/healthy</a>
+	  <li><a href="/metrics">/metrics</a>
+	  <li>/api/v1/read (point Prometheus here!)
+	</ul>`))
 }
