@@ -19,9 +19,24 @@ go build .
 
 ## Running
 
+This is a very simple proxy, so it accepts options of where to listen and where
+to forward to:
+
 ```
-./thanos-remote-read
+Usage of ./thanos-remote-read:
+  -listen string
+        [ip]:port to serve HTTP on (default ":10080")
+  -store string
+        Thanos Store API gRPC endpoint (default "localhost:10901")
 ```
+
+For example:
+```
+./thanos-remote-read -store localhost:10901
+```
+
+See the use cases for more background, `-store` can be pointed to anything
+implementing Thanos StoreAPI, e.g. `thanos store`, `thanos query`, etc.
 
 ## Configuring Prometheus
 
