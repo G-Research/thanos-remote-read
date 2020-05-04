@@ -10,6 +10,8 @@ This allows querying a Thanos StoreAPI server (store, query, etc.) from Promethe
   for example.
 * ["ruler"](docs/ruler.md): Running rules outside of Thanos, to provide more
   predictable query reliability than thanos-ruler can offer.
+* With [Geras](https://github.com/G-Research/geras): Use Geras to serve OpenTSDB
+  data on Thanos StoreAPI, then make that data available to Prometheus.
 
 ## Building
 
