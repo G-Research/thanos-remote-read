@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -135,8 +136,9 @@ var promMatcherToThanos = map[prompb.LabelMatcher_Type]storepb.LabelMatcher_Type
 }
 
 type AggrChunkByTimestamp []storepb.AggrChunk
-func (c AggrChunkByTimestamp) Len() int { return len(c) }
-func (c AggrChunkByTimestamp) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+
+func (c AggrChunkByTimestamp) Len() int           { return len(c) }
+func (c AggrChunkByTimestamp) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
 
 func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*prompb.ReadResponse, error) {
@@ -172,7 +174,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 			}
 			if err != nil {
 				log.Printf("Error in recv from thanos: %v", err)
-				break
+				return nil, err
 			}
 
 			switch r := res.GetResult().(type) {
@@ -189,18 +191,21 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 				for _, chunk := range r.Series.Chunks {
 					if chunk.Raw == nil {
 						// We only ask for and handle RAW
-						log.Printf("Unexpectedly missing raw chunk data")
-						continue
+						err := fmt.Errorf("unexpectedly missing raw chunk data")
+						log.Print(err)
+						return nil, err
 					}
 					if chunk.Raw.Type != storepb.Chunk_XOR {
-						log.Printf("Unexpected encoding type: %v", chunk.Raw.Type)
-						continue
+						err := fmt.Errorf("unexpected encoding type: %v", chunk.Raw.Type)
+						log.Print(err)
+						return nil, err
 					}
 
 					raw, err := chunkenc.FromData(chunkenc.EncXOR, chunk.Raw.Data)
 					if err != nil {
-						log.Printf("Error reading chunk: %v", err)
-						continue
+						err := fmt.Errorf("reading chunk: %w", err)
+						log.Print("Error ", err)
+						return nil, err
 					}
 
 					iter = raw.Iterator(iter)
