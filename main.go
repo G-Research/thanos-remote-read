@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
@@ -133,6 +134,11 @@ var promMatcherToThanos = map[prompb.LabelMatcher_Type]storepb.LabelMatcher_Type
 	prompb.LabelMatcher_NRE: storepb.LabelMatcher_NRE,
 }
 
+type AggrChunkByTimestamp []storepb.AggrChunk
+func (c AggrChunkByTimestamp) Len() int { return len(c) }
+func (c AggrChunkByTimestamp) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
+
 func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*prompb.ReadResponse, error) {
 	response := &prompb.ReadResponse{}
 
@@ -179,6 +185,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 					})
 				}
 
+				sort.Sort(AggrChunkByTimestamp(r.Series.Chunks))
 				for _, chunk := range r.Series.Chunks {
 					if chunk.Raw == nil {
 						// We only ask for and handle RAW
@@ -205,6 +212,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 						})
 					}
 				}
+
 				result.Timeseries = append(result.Timeseries, t)
 
 			case *storepb.SeriesResponse_Warning:
