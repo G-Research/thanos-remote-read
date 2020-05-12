@@ -1,0 +1,22 @@
+name: Test
+on: [pull_request, push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check formatting
+        run: |
+          files=$(go run golang.org/x/tools/cmd/goimports -l -local "github.com/G-Research" .)
+          if [[ $files != "" ]]; then
+            echo "Files need goimports running on them:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Run tests
+        run: |
+          go test ./...
