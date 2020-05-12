@@ -38,11 +38,13 @@ var (
 		[]string{"code", "method", "handler"})
 )
 
+func init() {
+	prometheus.MustRegister(httpRequests)
+}
+
 func main() {
 	flag.Parse()
-	prometheus.MustRegister(httpRequests)
 
-	api := &API{}
 	var err error
 	conn, err := grpc.Dial(*flagStore, grpc.WithInsecure(),
 		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
@@ -50,20 +52,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	api.client = storepb.NewStoreClient(conn)
+	setup(conn)
+	log.Fatal(http.ListenAndServe(*flagListen, nil))
+}
+
+func setup(conn *grpc.ClientConn) {
+	api := &API{
+		client: storepb.NewStoreClient(conn),
+	}
 
 	handler := func(path, name string, f http.HandlerFunc) {
 		http.HandleFunc(path, promhttp.InstrumentHandlerCounter(
-			httpRequests.MustCurryWith(prometheus.Labels{"handler": name}),
-			f))
+			httpRequests.MustCurryWith(prometheus.Labels{"handler": name}), f))
 	}
 	handler("/", "root", root)
 	handler("/-/healthy", "health", ok)
 	handler("/api/v1/read", "read", errorWrap(api.remoteRead))
 
 	http.Handle("/metrics", promhttp.Handler())
-
-	log.Fatal(http.ListenAndServe(*flagListen, nil))
 }
 
 type API struct {
