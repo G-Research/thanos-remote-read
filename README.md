@@ -1,6 +1,9 @@
 # Thanos remote read adapter
 
-This allows querying a Thanos StoreAPI server (store, query, etc.) from Prometheus.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+This allows querying a [Thanos](https://thanos.io) StoreAPI server (store,
+query, etc.) from [Prometheus](https://prometheus.io).
 
 ## Use cases
 
@@ -48,6 +51,12 @@ remote_read:
     # Potentially other options, see use cases docs and 
     # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_read
 ```
+
+## Contributing
+
+We welcome new contributors! We'll happily receive PRs for bug fixes or small
+changes. If you're contemplating something larger please get in touch first by
+opening a GitHub Issue describing the problem and how you propose to solve it.
 
 ## License
 
