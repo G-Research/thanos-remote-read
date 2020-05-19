@@ -1,6 +1,7 @@
 # Thanos remote read adapter
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Docker Image Version (latest semver)](https://img.shields.io/docker/v/gresearchdev/thanos-remote-read?style=plastic)](https://hub.docker.com/r/gresearchdev/thanos-remote-read)
 
 This allows querying a [Thanos](https://thanos.io) StoreAPI server (store,
 query, etc.) from [Prometheus](https://prometheus.io).
@@ -18,9 +19,15 @@ query, etc.) from [Prometheus](https://prometheus.io).
 
 ## Building
 
+Use the [Docker image](https://hub.docker.com/r/gresearchdev/thanos-remote-read).
+
+Or build latest master:
+
 ```
-go build .
+go get github.com/G-Research/thanos-remote-read
 ```
+
+This will give you `$(go env GOPATH)/bin/thanos-remote-read`
 
 ## Running
 
