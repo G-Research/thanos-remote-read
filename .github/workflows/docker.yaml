@@ -54,4 +54,7 @@ jobs:
           if [[ $VERSION != latest ]]; then
             docker tag image $DOCKERHUB_ID:$VERSION
             docker push $DOCKERHUB_ID:$VERSION
+            # Also mark release as latest on DockerHub
+            docker tag image $DOCKERHUB_ID:latest
+            docker push $DOCKERHUB_ID:latest
           fi
