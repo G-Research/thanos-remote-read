@@ -44,6 +44,8 @@ jobs:
           [ "$VERSION" == "master" ] && VERSION=latest
           echo VERSION=$VERSION
 
+          set -x
+
           # GitHub push
           docker tag image $GITHUB_ID:$VERSION
           docker push $GITHUB_ID:$VERSION
