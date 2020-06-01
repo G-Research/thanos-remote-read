@@ -36,6 +36,19 @@ var (
 			Name:      "requests_total",
 		},
 		[]string{"code", "method", "handler"})
+        dedupedSeriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "thanos_remote_read",
+			Name:      "deduped_series_total",
+		},
+		[]string{"response_state"})
+	//dedupedSeriesSorted = dedupedSeriesTotal.WithLabels(&prometheus.Labels{"response_state": "sorted"})
+	//dedupedSeriesUnsorted = dedupedSeriesTotal.WithLabels(&prometheus.Labels{"response_state": "unsorted"})
+        seriesTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "thanos_remote_read",
+			Name:      "series_total",
+		})
 )
 
 func init() {
@@ -183,18 +196,60 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 				return nil, err
 			}
 
+			var lastLabels []storepb.Label
+			series := []*storepb.Series{}
+			sorted := true
+
 			switch r := res.GetResult().(type) {
 			case *storepb.SeriesResponse_Series:
+				if lastLabels != nil {
+					cmp := storepb.CompareLabels(lastLabels, r.Series.Labels)
+					if cmp < 0 {
+						sorted = false
+					} else if cmp == 0 {
+						// Identical, need to merge.
+						series[len(series)-1].Chunks = sortChunks(series[len(series)-1].Chunks, r.Series.Chunks)
+						//dedupedSeriesSorted.Add(1)
+						continue
+					}
+				}
+				lastLabels = r.Series.Labels
+
+				sort.Sort(AggrChunkByTimestamp(r.Series.Chunks))
+
+				series = append(series, r.Series)
+
+			case *storepb.SeriesResponse_Warning:
+				// TODO: Can we return this somehow?
+				log.Printf("Warning from thanos: %v", r)
+			}
+
+			log.Printf("Sorted: %v", sorted)
+			if !sorted {
+				panic("unimpl")
+				//sort.Sort(
+			}
+
+			for _, series := range series {
 				t := &prompb.TimeSeries{}
-				for _, label := range r.Series.Labels {
+				for _, label := range series.Labels {
 					t.Labels = append(t.Labels, prompb.Label{
 						Name:  label.Name,
 						Value: label.Value,
 					})
 				}
 
-				sort.Sort(AggrChunkByTimestamp(r.Series.Chunks))
-				for _, chunk := range r.Series.Chunks {
+				var lastMax int64
+				for _, chunk := range series.Chunks {
+					// We drop all overlaps, need to work out how to do proper
+					// deduplication, see
+					// https://github.com/thanos-io/thanos/issues/2700 for one
+					// idea.
+					if chunk.MinTime < lastMax {
+						continue
+					}
+					lastMax = chunk.MaxTime
+
 					if chunk.Raw == nil {
 						// We only ask for and handle RAW
 						err := fmt.Errorf("unexpectedly missing raw chunk data")
@@ -223,17 +278,22 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 						})
 					}
 				}
-
 				result.Timeseries = append(result.Timeseries, t)
-
-			case *storepb.SeriesResponse_Warning:
-				// TODO: Can we return this somehow?
-				log.Printf("Warning from thanos: %v", r)
 			}
 		}
 		response.Results = append(response.Results, result)
 	}
 	return response, nil
+}
+
+// Merge chunks combines two list of chunks into chunks in order.
+func sortChunks(a, b []storepb.AggrChunk) []storepb.AggrChunk {
+	chunks := make([]storepb.AggrChunk, 0, len(a)+len(b))
+	copy(chunks, a)
+	copy(chunks[len(a):], b)
+
+	sort.Sort(AggrChunkByTimestamp(chunks))
+	return chunks
 }
 
 func ok(w http.ResponseWriter, r *http.Request) {
