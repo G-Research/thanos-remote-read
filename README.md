@@ -40,6 +40,8 @@ Usage of ./thanos-remote-read:
         [ip]:port to serve HTTP on (default ":10080")
   -store string
         Thanos Store API gRPC endpoint (default "localhost:10901")
+  -ignore-warnings
+        Ignore warnings from Thanos (default false)
 ```
 
 For example:
@@ -58,6 +60,15 @@ remote_read:
     # Potentially other options, see use cases docs and 
     # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_read
 ```
+
+### Warning handling
+
+Loading data from remote read may or may not be considered an error for the
+whole query, depending on your exact use case. The default is to propagate the
+error to Prometheus, as then you receive a warning when querying. This can be
+changed with the `-ignore-warnings` option.
+
+See also https://www.robustperception.io/remote-read-and-partial-failures
 
 ## Contributing
 

@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	flagListen = flag.String("listen", ":10080", "[ip]:port to serve HTTP on")
-	flagStore  = flag.String("store", "localhost:10901", "Thanos Store API gRPC endpoint")
+	flagListen         = flag.String("listen", ":10080", "[ip]:port to serve HTTP on")
+	flagStore          = flag.String("store", "localhost:10901", "Thanos Store API gRPC endpoint")
+	flagIgnoreWarnings = flag.Bool("ignore-warnings", false, "Ignore warnings from Thanos")
 )
 
 var (
@@ -111,10 +112,18 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 		return HTTPError{err, http.StatusBadRequest}
 	}
 
+	// Ignored selectors.
+	ignoredSelector := make(map[string]struct{})
+	if ignores, ok := r.URL.Query()["ignored"]; ok {
+		for _, ignore := range ignores {
+			ignoredSelector[ignore] = struct{}{}
+		}
+	}
+
 	// This does not do streaming, at the time of writing Prometheus doesn't ask
 	// for it anyway: https://github.com/prometheus/prometheus/issues/5926
 
-	resp, err := api.doStoreRequest(r.Context(), &req)
+	resp, err := api.doStoreRequest(r.Context(), &req, ignoredSelector)
 	if err != nil {
 		return err
 	}
@@ -147,7 +156,7 @@ func (c AggrChunkByTimestamp) Len() int           { return len(c) }
 func (c AggrChunkByTimestamp) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
 
-func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*prompb.ReadResponse, error) {
+func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ignoredSelector map[string]struct{}) (*prompb.ReadResponse, error) {
 	response := &prompb.ReadResponse{}
 
 	for _, query := range req.Queries {
@@ -159,6 +168,9 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 			Matchers:   make([]storepb.LabelMatcher, len(query.Matchers)),
 		}
 		for i, matcher := range query.Matchers {
+			if _, ok := ignoredSelector[matcher.Name]; !ok {
+				continue
+			}
 			storeReq.Matchers[i] = storepb.LabelMatcher{
 				Name:  matcher.Name,
 				Type:  promMatcherToThanos[matcher.Type],
@@ -173,6 +185,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 
 		result := &prompb.QueryResult{}
 		iter := chunkenc.NewNopIterator()
+
 		for {
 			res, err := storeRes.Recv()
 			if err == io.EOF {
@@ -227,8 +240,11 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest) (*p
 				result.Timeseries = append(result.Timeseries, t)
 
 			case *storepb.SeriesResponse_Warning:
-				// TODO: Can we return this somehow?
-				log.Printf("Warning from thanos: %v", r)
+				if *flagIgnoreWarnings {
+					log.Printf("Warning from thanos: %v", r)
+				} else {
+					return nil, HTTPError{fmt.Errorf("%v", r), http.StatusInternalServerError}
+				}
 			}
 		}
 		response.Results = append(response.Results, result)
