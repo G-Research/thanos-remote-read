@@ -61,6 +61,28 @@ remote_read:
     # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_read
 ```
 
+### Ignoring certain selectors
+
+In some situations you may have selectors that are present as external labels
+on your Prometheus instance (e.g. `prometheus`, `prometheus_replica`, `cluster`
+or similar).
+
+These will be passed to the remote read query. In general this is what you want
+for using Thanos as a way to make longer term storage visible to the Prometheus
+instance the data originated from. However in some cases you may have data
+aggregated in different ways in Thanos.
+
+To remove specific labels from the query that is sent to Thanos do something
+like:
+
+```yaml
+  - url: "http://localhost:10080/api/v1/read?ignore=prometheus_replica"
+```
+
+Note that this will not do de-duplication across these labels, so you will need
+to make sure if needed to either aggregate in Prometheus (e.g. something like
+`max(...) without(prometheus_replica)`), or Thanos (via ruler).
+
 ### Warning handling
 
 Loading data from remote read may or may not be considered an error for the
