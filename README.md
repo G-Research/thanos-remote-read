@@ -40,6 +40,8 @@ Usage of ./thanos-remote-read:
         [ip]:port to serve HTTP on (default ":10080")
   -store string
         Thanos Store API gRPC endpoint (default "localhost:10901")
+  -ignore-warnings
+        Ignore warnings from Thanos (default false)
 ```
 
 For example:
@@ -58,6 +60,37 @@ remote_read:
     # Potentially other options, see use cases docs and 
     # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_read
 ```
+
+### Ignoring certain selectors
+
+In some situations you may have selectors that are present as external labels
+on your Prometheus instance (e.g. `prometheus`, `prometheus_replica`, `cluster`
+or similar).
+
+These will be passed to the remote read query. In general this is what you want
+for using Thanos as a way to make longer term storage visible to the Prometheus
+instance the data originated from. However in some cases you may have data
+aggregated in different ways in Thanos.
+
+To remove specific labels from the query that is sent to Thanos do something
+like:
+
+```yaml
+  - url: "http://localhost:10080/api/v1/read?ignore=prometheus_replica"
+```
+
+Note that this will not do de-duplication across these labels, so you will need
+to make sure if needed to either aggregate in Prometheus (e.g. something like
+`max(...) without(prometheus_replica)`), or Thanos (via ruler).
+
+### Warning handling
+
+Loading data from remote read may or may not be considered an error for the
+whole query, depending on your exact use case. The default is to propagate the
+error to Prometheus, as then you receive a warning when querying. This can be
+changed with the `-ignore-warnings` option.
+
+See also https://www.robustperception.io/remote-read-and-partial-failures
 
 ## Contributing
 
