@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -23,12 +24,25 @@ import (
 // Based on code from https://stackoverflow.com/a/52080545
 const bufSize = 1024 * 1024
 
-var lis *bufconn.Listener
+type TestStore struct {
+	storepb.UnimplementedStoreServer
+	req *storepb.SeriesRequest
+}
+
+func (store *TestStore) Series(req *storepb.SeriesRequest, server storepb.Store_SeriesServer) error {
+	store.req = req
+	return errors.New("Always errors")
+}
+
+var (
+	testStore = &TestStore{}
+	lis       *bufconn.Listener
+)
 
 func init() {
 	lis = bufconn.Listen(bufSize)
 	s := grpc.NewServer()
-	storepb.RegisterStoreServer(s, &storepb.UnimplementedStoreServer{})
+	storepb.RegisterStoreServer(s, testStore)
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Server exited with error: %v", err)
@@ -104,12 +118,14 @@ func TestReadEmpty(t *testing.T) {
 }
 
 func TestReadBasic(t *testing.T) {
-	// A simple query => error because we use UnimplementedStoreServer.
+	// A simple query => error because we don't implement responses in the tests yet.
 	request := &prompb.ReadRequest{
 		Queries: []*prompb.Query{
 			{
 				Matchers: []*prompb.LabelMatcher{
 					{Name: "__name__", Value: "test"},
+					{Name: "job", Value: "testing", Type: prompb.LabelMatcher_RE},
+					{Name: "ignorethis", Value: "blah"},
 				},
 			},
 		},
@@ -119,11 +135,29 @@ func TestReadBasic(t *testing.T) {
 		t.Errorf("proto marshal: %v", err)
 	}
 	sbuf := snappy.Encode(nil, rbuf)
-	r := httptest.NewRequest("POST", "/api/v1/read", bytes.NewReader(sbuf))
+	r := httptest.NewRequest("POST", "/api/v1/read?ignore=ignorethis", bytes.NewReader(sbuf))
 	w := httptest.NewRecorder()
 	http.DefaultServeMux.ServeHTTP(w, r)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("got %v, expected %v", w.Code, http.StatusInternalServerError)
+	}
+
+	matchers := testStore.req.Matchers
+	if len(matchers) != 2 {
+		t.Errorf("got %v, expected 2 matchers", len(matchers))
+	}
+	for _, matcher := range matchers {
+		if matcher.Name == "__name__" {
+			if matcher.Value != "test" || matcher.Type != storepb.LabelMatcher_EQ {
+				t.Errorf("got %#v, expected = test", matcher)
+			}
+		} else if matcher.Name == "job" {
+			if matcher.Value != "testing" || matcher.Type != storepb.LabelMatcher_RE {
+				t.Errorf("got %#v, expected =~ testing", matcher)
+			}
+		} else {
+			t.Errorf("got %#v, unexpected", matcher)
+		}
 	}
 }
