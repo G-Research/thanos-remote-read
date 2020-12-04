@@ -114,7 +114,7 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 
 	// Ignored selectors.
 	ignoredSelector := make(map[string]struct{})
-	if ignores, ok := r.URL.Query()["ignored"]; ok {
+	if ignores, ok := r.URL.Query()["ignore"]; ok {
 		for _, ignore := range ignores {
 			ignoredSelector[ignore] = struct{}{}
 		}
@@ -165,16 +165,16 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 			MaxTime: query.EndTimestampMs,
 			// Prometheus doesn't understand Thanos compaction, only ask for raw data.
 			Aggregates: []storepb.Aggr{storepb.Aggr_RAW},
-			Matchers:   make([]storepb.LabelMatcher, len(query.Matchers)),
+			Matchers:   make([]storepb.LabelMatcher, 0, len(query.Matchers)),
 		}
-		for i, matcher := range query.Matchers {
-			if _, ok := ignoredSelector[matcher.Name]; !ok {
+		for _, matcher := range query.Matchers {
+			if _, ok := ignoredSelector[matcher.Name]; ok {
 				continue
 			}
-			storeReq.Matchers[i] = storepb.LabelMatcher{
+			storeReq.Matchers = append(storeReq.Matchers, storepb.LabelMatcher{
 				Name:  matcher.Name,
 				Type:  promMatcherToThanos[matcher.Type],
-				Value: matcher.Value}
+				Value: matcher.Value})
 		}
 
 		log.Printf("Thanos request: %v", storeReq)
