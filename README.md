@@ -1,12 +1,11 @@
-# Thanos remote read adapter
-
-<img src="Thanos-remote-read_SignatureLogo_RGB-Black.svg" width="180">
+<img src="Thanos-remote-read_SignatureLogo_RGB-Black.svg" width="180" alt="thanos-remote-read">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Docker Image Version (latest semver)](https://img.shields.io/docker/v/gresearchdev/thanos-remote-read)](https://hub.docker.com/r/gresearchdev/thanos-remote-read)
 
-This allows querying a [Thanos](https://thanos.io) StoreAPI server (store,
-query, etc.) from [Prometheus](https://prometheus.io).
+This is an adapter that allows querying a [Thanos](https://thanos.io) StoreAPI server
+(store, query, etc.) from [Prometheus](https://prometheus.io) via Prometheus's remote
+read support.
 
 ## Use cases
 
