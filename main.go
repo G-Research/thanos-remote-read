@@ -19,14 +19,13 @@ import (
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	jaegerExporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var (
