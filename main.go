@@ -22,6 +22,11 @@ import (
 	"google.golang.org/grpc"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	jaegerExporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -43,13 +48,27 @@ func init() {
 	prometheus.MustRegister(httpRequests)
 }
 
+func initTracer() func() {
+	flush, err := jaegerExporter.InstallNewPipeline(jaegerExporter.WithCollectorEndpoint(""), jaegerExporter.WithDisabled(true))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return flush
+}
+
 func main() {
+	log.Printf("info: starting up thanos-remote-read...")
 	flag.Parse()
 
-	var err error
+	flush := initTracer()
+	defer flush()
+
 	conn, err := grpc.Dial(*flagStore, grpc.WithInsecure(),
 		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
-		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor))
+		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
+		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,7 +83,9 @@ func setup(conn *grpc.ClientConn) {
 
 	handler := func(path, name string, f http.HandlerFunc) {
 		http.HandleFunc(path, promhttp.InstrumentHandlerCounter(
-			httpRequests.MustCurryWith(prometheus.Labels{"handler": name}), f))
+			httpRequests.MustCurryWith(prometheus.Labels{"handler": name}),
+			otelhttp.NewHandler(f, name),
+		))
 	}
 	handler("/", "root", root)
 	handler("/-/healthy", "health", ok)
@@ -97,6 +118,10 @@ type HTTPError struct {
 }
 
 func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
+	defer span.End()
+
 	compressed, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return err
@@ -157,6 +182,9 @@ func (c AggrChunkByTimestamp) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
 
 func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ignoredSelector map[string]struct{}) (*prompb.ReadResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	defer span.End()
+
 	response := &prompb.ReadResponse{}
 
 	for _, query := range req.Queries {
@@ -253,10 +281,16 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 }
 
 func ok(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
+	defer span.End()
 	w.Write([]byte("ok"))
 }
 
 func root(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
+	defer span.End()
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
