@@ -49,7 +49,11 @@ func init() {
 }
 
 func initTracer() func() {
-	flush, err := jaegerExporter.InstallNewPipeline(jaegerExporter.WithCollectorEndpoint(""), jaegerExporter.WithDisabled(true))
+	flush, err := jaegerExporter.InstallNewPipeline(
+		jaegerExporter.WithCollectorEndpoint(""),
+		jaegerExporter.WithDisabled(true),
+		jaegerExporter.WithDisabledFromEnv(),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
