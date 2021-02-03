@@ -12,6 +12,7 @@ require (
 	github.com/thanos-io/thanos v0.12.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.16.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.16.0
+	go.opentelemetry.io/contrib/propagators v0.16.0 // indirect
 	go.opentelemetry.io/otel v0.16.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.16.0
 	golang.org/x/sys v0.0.0-20210104204734-6f8348627aad // indirect
