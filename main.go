@@ -21,10 +21,13 @@ import (
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	jaegerPropagator "go.opentelemetry.io/contrib/propagators/jaeger"
 	jaegerExporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
 )
 
@@ -59,6 +62,12 @@ func initTracer() func() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		jaegerPropagator.Jaeger{},
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 
 	return flush
 }
