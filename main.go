@@ -134,7 +134,9 @@ type HTTPError struct {
 
 func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	span := trace.SpanFromContext(ctx)
+	tracer := otel.Tracer("")
+	var span trace.Span
+	ctx, span = tracer.Start(ctx, "remoteRead")
 	defer span.End()
 
 	compressed, err := ioutil.ReadAll(r.Body)
@@ -197,7 +199,9 @@ func (c AggrChunkByTimestamp) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
 
 func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ignoredSelector map[string]struct{}) (*prompb.ReadResponse, error) {
-	span := trace.SpanFromContext(ctx)
+	tracer := otel.Tracer("")
+	var span trace.Span
+	ctx, span = tracer.Start(ctx, "doStoreRequest")
 	defer span.End()
 
 	response := &prompb.ReadResponse{}
