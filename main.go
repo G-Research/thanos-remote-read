@@ -159,11 +159,9 @@ type API struct {
 	client storepb.StoreClient
 }
 
-func loggerWrap(f func(w http.ResponseWriter, r *http.Request) error, logger log.Logger) func(w http.ResponseWriter, r *http.Request) error {
+func loggerWrap(f func(w http.ResponseWriter, r *http.Request, logger log.Logger) error, logger log.Logger) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		ctx := context.WithValue(r.Context(), "logger", logger)
-		newR := r.WithContext(ctx)
-		return f(w, newR)
+		return f(w, r, logger)
 	}
 }
 
@@ -186,9 +184,8 @@ type HTTPError struct {
 	Status int
 }
 
-func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
+func (api *API) remoteRead(w http.ResponseWriter, r *http.Request, logger log.Logger) error {
 	ctx := r.Context()
-	logger := ctx.Value("logger").(log.Logger)
 	tracer := otel.Tracer("")
 	var span trace.Span
 	ctx, span = tracer.Start(ctx, "remoteRead")
@@ -220,7 +217,7 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 	// This does not do streaming, at the time of writing Prometheus doesn't ask
 	// for it anyway: https://github.com/prometheus/prometheus/issues/5926
 
-	resp, err := api.doStoreRequest(r.Context(), &req, ignoredSelector)
+	resp, err := api.doStoreRequest(r.Context(), &req, ignoredSelector, logger)
 	if err != nil {
 		return err
 	}
@@ -253,12 +250,11 @@ func (c AggrChunkByTimestamp) Len() int           { return len(c) }
 func (c AggrChunkByTimestamp) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c AggrChunkByTimestamp) Less(i, j int) bool { return c[i].MinTime < c[j].MinTime }
 
-func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ignoredSelector map[string]struct{}) (*prompb.ReadResponse, error) {
+func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ignoredSelector map[string]struct{}, logger log.Logger) (*prompb.ReadResponse, error) {
 	tracer := otel.Tracer("")
 	var span trace.Span
 	ctx, span = tracer.Start(ctx, "doStoreRequest")
 	defer span.End()
-	logger := ctx.Value("logger").(log.Logger)
 
 	response := &prompb.ReadResponse{}
 
