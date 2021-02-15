@@ -41,7 +41,6 @@ var (
 	flagLogFormat      = flag.String("log.format", "logfmt", "Log format. One of [logfmt, json]")
 	flagLogLevel       = flag.String("log.level", "info", "Log filtering level. One of [debug, info, warn, error]")
 )
-var logger log.Logger
 
 var (
 	httpRequests = prometheus.NewCounterVec(
@@ -56,7 +55,7 @@ func init() {
 	prometheus.MustRegister(httpRequests)
 }
 
-func initTracer() func() {
+func initTracer(logger log.Logger) func() {
 	flush, err := jaegerExporter.InstallNewPipeline(
 		jaegerExporter.WithCollectorEndpoint(""),
 		jaegerExporter.WithProcess(jaegerExporter.Process{
@@ -79,14 +78,15 @@ func initTracer() func() {
 	return flush
 }
 
-func InitConfiguredLogger(format string, logLevel string) error {
+func InitConfiguredLogger(format string, logLevel string) (log.Logger, error) {
+	var logger log.Logger
 	switch format {
 	case "logfmt":
 		logger = log.NewLogfmtLogger(os.Stdout)
 	case "json":
 		logger = log.NewJSONLogger(os.Stdout)
 	default:
-		return errors.Errorf("%s is not a valid log format", format)
+		return nil, errors.Errorf("%s is not a valid log format", format)
 	}
 
 	var filterOption level.Option
@@ -100,24 +100,24 @@ func InitConfiguredLogger(format string, logLevel string) error {
 	case "error":
 		filterOption = level.AllowError()
 	default:
-		return errors.Errorf("%s is not a valid log level", logLevel)
+		return nil, errors.Errorf("%s is not a valid log level", logLevel)
 	}
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.Caller(5))
 	logger = level.NewFilter(logger, filterOption)
-	return nil
+	return logger, nil
 }
 
 func main() {
 	fmt.Println("info: starting up thanos-remote-read...")
 	flag.Parse()
 
-	err := InitConfiguredLogger(*flagLogFormat, *flagLogLevel)
+	logger, err := InitConfiguredLogger(*flagLogFormat, *flagLogLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not initialize logger: %s", err)
 		os.Exit(1)
 	}
 
-	flush := initTracer()
+	flush := initTracer(logger)
 	defer flush()
 
 	conn, err := grpc.Dial(*flagStore, grpc.WithInsecure(),
@@ -129,7 +129,7 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
-	setup(conn)
+	setup(conn, logger)
 	err = (http.ListenAndServe(*flagListen, nil))
 	if err != nil {
 		level.Error(logger).Log("err", err)
@@ -137,7 +137,7 @@ func main() {
 	}
 }
 
-func setup(conn *grpc.ClientConn) {
+func setup(conn *grpc.ClientConn, logger log.Logger) {
 	api := &API{
 		client: storepb.NewStoreClient(conn),
 	}
@@ -150,13 +150,21 @@ func setup(conn *grpc.ClientConn) {
 	}
 	handler("/", "root", root)
 	handler("/-/healthy", "health", ok)
-	handler("/api/v1/read", "read", errorWrap(api.remoteRead))
+	handler("/api/v1/read", "read", errorWrap(loggerWrap(api.remoteRead, logger)))
 
 	http.Handle("/metrics", promhttp.Handler())
 }
 
 type API struct {
 	client storepb.StoreClient
+}
+
+func loggerWrap(f func(w http.ResponseWriter, r *http.Request) error, logger log.Logger) func(w http.ResponseWriter, r *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		ctx := context.WithValue(r.Context(), "logger", logger)
+		newR := r.WithContext(ctx)
+		return f(w, newR)
+	}
 }
 
 func errorWrap(f func(w http.ResponseWriter, r *http.Request) error) func(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +188,7 @@ type HTTPError struct {
 
 func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	logger := ctx.Value("logger").(log.Logger)
 	tracer := otel.Tracer("")
 	var span trace.Span
 	ctx, span = tracer.Start(ctx, "remoteRead")
@@ -226,7 +235,6 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 
 	compressed = snappy.Encode(nil, data)
 	if _, err := w.Write(compressed); err != nil {
-		// log.Printf("Error writing response: %v", err)
 		level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID)
 	}
 	return nil
@@ -250,6 +258,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 	var span trace.Span
 	ctx, span = tracer.Start(ctx, "doStoreRequest")
 	defer span.End()
+	logger := ctx.Value("logger").(log.Logger)
 
 	response := &prompb.ReadResponse{}
 
