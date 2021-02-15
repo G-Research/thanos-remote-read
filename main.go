@@ -78,7 +78,7 @@ func initTracer(logger log.Logger) func() {
 	return flush
 }
 
-func InitConfiguredLogger(format string, logLevel string) (log.Logger, error) {
+func NewConfiguredLogger(format string, logLevel string) (log.Logger, error) {
 	var logger log.Logger
 	switch format {
 	case "logfmt":
@@ -111,7 +111,7 @@ func main() {
 	fmt.Println("info: starting up thanos-remote-read...")
 	flag.Parse()
 
-	logger, err := InitConfiguredLogger(*flagLogFormat, *flagLogLevel)
+	logger, err := NewConfiguredLogger(*flagLogFormat, *flagLogLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not initialize logger: %s", err)
 		os.Exit(1)
