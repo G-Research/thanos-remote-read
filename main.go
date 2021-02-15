@@ -16,7 +16,6 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/prometheus/prompb"
@@ -86,7 +85,7 @@ func NewConfiguredLogger(format string, logLevel string) (log.Logger, error) {
 	case "json":
 		logger = log.NewJSONLogger(os.Stdout)
 	default:
-		return nil, errors.Errorf("%s is not a valid log format", format)
+		return nil, fmt.Errorf("%s is not a valid log format", format)
 	}
 
 	var filterOption level.Option
@@ -100,7 +99,7 @@ func NewConfiguredLogger(format string, logLevel string) (log.Logger, error) {
 	case "error":
 		filterOption = level.AllowError()
 	default:
-		return nil, errors.Errorf("%s is not a valid log level", logLevel)
+		return nil, fmt.Errorf("%s is not a valid log level", logLevel)
 	}
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.Caller(5))
 	logger = level.NewFilter(logger, filterOption)
