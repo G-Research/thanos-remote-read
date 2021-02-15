@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
+	"os"
 	"sort"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/prometheus/prompb"
@@ -35,7 +38,10 @@ var (
 	flagListen         = flag.String("listen", ":10080", "[ip]:port to serve HTTP on")
 	flagStore          = flag.String("store", "localhost:10901", "Thanos Store API gRPC endpoint")
 	flagIgnoreWarnings = flag.Bool("ignore-warnings", false, "Ignore warnings from Thanos")
+	flagLogFormat      = flag.String("log.format", "logfmt", "Log format. One of [logfmt, json]")
+	flagLogLevel       = flag.String("log.level", "info", "Log filtering level. One of [debug, info, warn, error]")
 )
+var logger log.Logger
 
 var (
 	httpRequests = prometheus.NewCounterVec(
@@ -60,7 +66,8 @@ func initTracer() func() {
 		jaegerExporter.WithDisabledFromEnv(),
 	)
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
 	}
 
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -72,9 +79,43 @@ func initTracer() func() {
 	return flush
 }
 
+func InitConfiguredLogger(format string, logLevel string) error {
+	switch format {
+	case "logfmt":
+		logger = log.NewLogfmtLogger(os.Stdout)
+	case "json":
+		logger = log.NewJSONLogger(os.Stdout)
+	default:
+		return errors.Errorf("%s is not a valid log format", format)
+	}
+
+	var filterOption level.Option
+	switch logLevel {
+	case "debug":
+		filterOption = level.AllowDebug()
+	case "info":
+		filterOption = level.AllowInfo()
+	case "warn":
+		filterOption = level.AllowWarn()
+	case "error":
+		filterOption = level.AllowError()
+	default:
+		return errors.Errorf("%s is not a valid log level", logLevel)
+	}
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.Caller(5))
+	logger = level.NewFilter(logger, filterOption)
+	return nil
+}
+
 func main() {
-	log.Printf("info: starting up thanos-remote-read...")
+	fmt.Println("info: starting up thanos-remote-read...")
 	flag.Parse()
+
+	err := InitConfiguredLogger(*flagLogFormat, *flagLogLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not initialize logger: %s", err)
+		os.Exit(1)
+	}
 
 	flush := initTracer()
 	defer flush()
@@ -85,10 +126,15 @@ func main() {
 		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()))
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
 	}
 	setup(conn)
-	log.Fatal(http.ListenAndServe(*flagListen, nil))
+	err = (http.ListenAndServe(*flagListen, nil))
+	if err != nil {
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 }
 
 func setup(conn *grpc.ClientConn) {
@@ -180,7 +226,8 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) error {
 
 	compressed = snappy.Encode(nil, data)
 	if _, err := w.Write(compressed); err != nil {
-		log.Printf("Error writing response: %v", err)
+		// log.Printf("Error writing response: %v", err)
+		level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID)
 	}
 	return nil
 }
@@ -224,7 +271,11 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 				Value: matcher.Value})
 		}
 
-		log.Printf("Thanos request: %v", storeReq)
+		level.Info(logger).Log(
+			"traceID", span.SpanContext().TraceID,
+			"msg", "thanos request",
+			"request", fmt.Sprintf("%v", storeReq),
+		)
 		storeRes, err := api.client.Series(ctx, storeReq)
 		if err != nil {
 			return nil, err
@@ -239,7 +290,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 				break
 			}
 			if err != nil {
-				log.Printf("Error in recv from thanos: %v", err)
+				level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID, "msg", "Error in recv from thanos")
 				return nil, err
 			}
 
@@ -258,19 +309,19 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 					if chunk.Raw == nil {
 						// We only ask for and handle RAW
 						err := fmt.Errorf("unexpectedly missing raw chunk data")
-						log.Print(err)
+						level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID)
 						return nil, err
 					}
 					if chunk.Raw.Type != storepb.Chunk_XOR {
 						err := fmt.Errorf("unexpected encoding type: %v", chunk.Raw.Type)
-						log.Print(err)
+						level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID)
 						return nil, err
 					}
 
 					raw, err := chunkenc.FromData(chunkenc.EncXOR, chunk.Raw.Data)
 					if err != nil {
 						err := fmt.Errorf("reading chunk: %w", err)
-						log.Print("Error ", err)
+						level.Error(logger).Log("err", err, "traceID", span.SpanContext().TraceID)
 						return nil, err
 					}
 
@@ -288,7 +339,7 @@ func (api *API) doStoreRequest(ctx context.Context, req *prompb.ReadRequest, ign
 
 			case *storepb.SeriesResponse_Warning:
 				if *flagIgnoreWarnings {
-					log.Printf("Warning from thanos: %v", r)
+					level.Warn(logger).Log("result", fmt.Sprintf("%v", r), "traceID", span.SpanContext().TraceID)
 				} else {
 					return nil, HTTPError{fmt.Errorf("%v", r), http.StatusInternalServerError}
 				}
