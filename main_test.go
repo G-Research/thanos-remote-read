@@ -58,6 +58,8 @@ func TestMain(m *testing.M) {
 	var logOutput bytes.Buffer
 	log.SetOutput(&logOutput)
 
+	logger, err := NewConfiguredLogger("logfmt", "error")
+
 	ctx := context.Background()
 	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
 	if err != nil {
@@ -65,7 +67,7 @@ func TestMain(m *testing.M) {
 	}
 
 	defer conn.Close()
-	setup(conn)
+	setup(conn, logger)
 
 	status := m.Run()
 	if status != 0 {
