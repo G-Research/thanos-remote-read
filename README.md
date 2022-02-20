@@ -1,4 +1,4 @@
-<img src="https://github.com/Debiday/thanos-remote-read/blob/logo-folder/docs/logo/png/Thanos-remote-read_SignatureLogo_RGB-Black.png" width="180" alt="thanos-remote-read">
+<img src="https://github.com/G-Research/thanos-remote-read/blob/logo-folder/docs/logo/png/Thanos-remote-read_SignatureLogo_RGB-Black.png" width="180" alt="thanos-remote-read">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Docker Image Version (latest semver)](https://img.shields.io/docker/v/gresearchdev/thanos-remote-read)](https://hub.docker.com/r/gresearchdev/thanos-remote-read)
