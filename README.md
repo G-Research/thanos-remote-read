@@ -1,4 +1,4 @@
-<img src="Thanos-remote-read_SignatureLogo_RGB-Black.svg" width="180" alt="thanos-remote-read">
+<img src="docs/logo/svg/Thanos-remote-read_SignatureLogo_RGB-Black.svg" width="180" alt="thanos-remote-read">
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Docker Image Version (latest semver)](https://img.shields.io/docker/v/gresearchdev/thanos-remote-read)](https://hub.docker.com/r/gresearchdev/thanos-remote-read)
