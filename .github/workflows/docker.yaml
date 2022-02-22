@@ -2,7 +2,7 @@ name: Docker
 on:
   push:
     branches:
-      - OSS65-thanos-build-fix
+      - master
       # For testing docker building if needed
       - build/*
 
