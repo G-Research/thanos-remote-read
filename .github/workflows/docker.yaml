@@ -21,6 +21,20 @@ jobs:
 
       - name: Build image
         run: docker build -t image .
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@2a2157eb22c08c9a1fac99263430307b8d1bc7a2
+        with:
+          image-ref: 'docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME:${{ github.sha }}'
+          format: 'template'
+          template: '@/contrib/sarif.tpl'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: 'trivy-results.sarif'
 
       - name: Log into registry
         if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
