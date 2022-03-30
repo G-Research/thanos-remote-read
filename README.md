@@ -25,7 +25,7 @@ Use the [Docker image](https://hub.docker.com/r/gresearchdev/thanos-remote-read)
 Or build latest master:
 
 ```
-go get github.com/G-Research/thanos-remote-read
+go install github.com/G-Research/thanos-remote-read@latest
 ```
 
 This will give you `$(go env GOPATH)/bin/thanos-remote-read`
