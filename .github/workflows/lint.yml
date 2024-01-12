@@ -24,13 +24,13 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Lint using golangci-lint
-        uses: golangci/golangci-lint-action@v3.7.0
+        uses: golangci/golangci-lint-action@v2
         with:
           skip-pkg-cache: true
           skip-build-cache: true
           version: v1.54
           only-new-issues: true
-          args: --timeout=10m --issues-exit-code=1 --sort-results ./...
+          args: --timeout=10m --issues-exit-code=1 
 
       - name: Generating Golang lint results as summary
         if: ${{ always() }}
