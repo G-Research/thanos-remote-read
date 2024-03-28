@@ -55,25 +55,31 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 }
 
 func TestMain(m *testing.M) {
-	var logOutput bytes.Buffer
-	log.SetOutput(&logOutput)
+    var logOutput bytes.Buffer
+    log.SetOutput(&logOutput)
 
-	logger, err := NewConfiguredLogger("logfmt", "error")
+    // Adjusted: Use var for err to avoid redeclaration
+    var err error
+    logger, err := NewConfiguredLogger("logfmt", "error")
+    // Check or handle the error from NewConfiguredLogger
+    if err != nil {
+        log.Fatalf("Failed to initialize logger: %v", err)
+    }
 
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("Failed to dial bufnet: %v", err)
-	}
+    ctx := context.Background()
+    conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
+    if err != nil {
+        log.Fatalf("Failed to dial bufnet: %v", err)
+    }
 
-	defer conn.Close()
-	setup(conn, logger)
+    defer conn.Close()
+    setup(conn, logger)
 
-	status := m.Run()
-	if status != 0 {
-		fmt.Fprint(os.Stderr, logOutput.String())
-	}
-	os.Exit(status)
+    status := m.Run()
+    if status != 0 {
+        fmt.Fprint(os.Stderr, logOutput.String())
+    }
+    os.Exit(status)
 }
 
 func TestURLs(t *testing.T) {

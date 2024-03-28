@@ -13,6 +13,10 @@ env:
   IMAGE_NAME: thanos-remote-read
 
 jobs:
+  lint:
+    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
+    uses: ./.github/workflows/lint.yml
+
   build:
     runs-on: ubuntu-latest
 

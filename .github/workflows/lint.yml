@@ -1,0 +1,48 @@
+name: "Lint"
+
+on:
+  pull_request: 
+    branches: ["master"]
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+
+  go-lint:
+    name: Lint Go
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Set up Go (no caching)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.17'
+          cache-dependency-path: go.sum
+
+      - name: Lint using golangci-lint
+        uses: golangci/golangci-lint-action@v4.0.0
+        with:
+          skip-pkg-cache: true
+          skip-build-cache: true
+          version: v1.56
+          only-new-issues: true
+          args: --timeout=10m --issues-exit-code=1 
+
+      - name: Generating Golang lint results as summary
+        if: ${{ always() }}
+        run: |
+          golangci-lint run > lint_results.txt || true
+          lint_results=$(cat lint_results.txt)
+          echo -e "## 🪧 Go Lint Results\n" >> $GITHUB_STEP_SUMMARY
+          if [ -z "$lint_results" ]; then
+            echo -e "### No Lint Issues found.\n" >> $GITHUB_STEP_SUMMARY
+          else
+              echo -e "###  List of Lint Issues \n" >> $GITHUB_STEP_SUMMARY
+              echo -e "${lint_results}" >> $GITHUB_STEP_SUMMARY
+          fi
+        continue-on-error: true
