@@ -99,6 +99,10 @@ We welcome new contributors! We'll happily receive PRs for bug fixes or small
 changes. If you're contemplating something larger please get in touch first by
 opening a GitHub Issue describing the problem and how you propose to solve it.
 
+## Security
+
+Please see our [security policy](https://github.com/G-Research/thanos-remote-read/blob/master/SECURITY.md) for details on reporting security vulnerabilities.
+
 ## License
 
 Copyright 2020 G-Research
